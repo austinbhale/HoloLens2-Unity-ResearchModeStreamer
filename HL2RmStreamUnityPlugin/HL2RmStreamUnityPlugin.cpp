@@ -41,6 +41,8 @@ void HL2Stream::StreamingToggle()
 {
 	m_videoFrameProcessor->StreamingToggle();
 	m_pAHATStreamer->StreamingToggle();
+	m_pLFStreamer->StreamingToggle();
+	m_pRFStreamer->StreamingToggle();
 }
 
 winrt::Windows::Foundation::IAsyncAction HL2Stream::InitializeVideoFrameProcessorAsync()
@@ -113,6 +115,24 @@ void HL2Stream::InitializeResearchModeSensors()
 				m_pAHATSensor->GetFriendlyName());
 			OutputDebugStringW(msgBuffer);
 		}
+
+		if (sensorDescriptor.sensorType == LEFT_FRONT)
+		{
+			winrt::check_hresult(m_pSensorDevice->GetSensor(
+				sensorDescriptor.sensorType, &m_pLFSensor));
+			swprintf_s(msgBuffer, L"Image2Face::InitializeSensors: Sensor %ls\n",
+				m_pLFSensor->GetFriendlyName());
+			OutputDebugStringW(msgBuffer);
+		}
+
+		if (sensorDescriptor.sensorType == RIGHT_FRONT)
+		{
+			winrt::check_hresult(m_pSensorDevice->GetSensor(
+				sensorDescriptor.sensorType, &m_pRFSensor));
+			swprintf_s(msgBuffer, L"Image2Face::InitializeSensors: Sensor %ls\n",
+				m_pRFSensor->GetFriendlyName());
+			OutputDebugStringW(msgBuffer);
+		}
 	}
 	OutputDebugStringW(L"Image2Face::InitializeSensors: Done.\n");
 	return;
@@ -134,6 +154,28 @@ void HL2Stream::InitializeResearchModeProcessing()
 			m_pAHATSensor, camConsentGiven, &camAccessCheck, 0, m_pAHATStreamer);
 
 		m_pAHATProcessor = processor;
+	}
+
+	auto leftFrontStreamer = std::make_shared<Streamer>(L"23942", guid, m_worldOrigin);
+	m_pLFStreamer = leftFrontStreamer;
+
+	if (m_pLFSensor)
+	{
+		auto processor = std::make_shared<ResearchModeFrameProcessor>(
+			m_pLFSensor, camConsentGiven, &camAccessCheck, 0, m_pLFStreamer);
+
+		m_pLFProcessor = processor;
+	}
+
+	auto rightFrontStreamer = std::make_shared<Streamer>(L"23943", guid, m_worldOrigin);
+	m_pRFStreamer = rightFrontStreamer;
+
+	if (m_pRFSensor)
+	{
+		auto processor = std::make_shared<ResearchModeFrameProcessor>(
+			m_pRFSensor, camConsentGiven, &camAccessCheck, 0, m_pRFStreamer);
+
+		m_pRFProcessor = processor;
 	}
 }
 
@@ -157,6 +199,14 @@ void HL2Stream::DisableSensors()
 	if (m_pAHATSensor)
 	{
 		m_pAHATSensor->Release();
+	}
+	if (m_pLFSensor)
+	{
+		m_pLFSensor->Release();
+	}
+	if (m_pRFSensor)
+	{
+		m_pRFSensor->Release();
 	}
 	if (m_pSensorDevice)
 	{

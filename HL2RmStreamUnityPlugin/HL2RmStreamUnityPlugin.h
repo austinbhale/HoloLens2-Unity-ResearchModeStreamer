@@ -39,10 +39,16 @@ namespace HL2Stream
 
 	// sensor
 	IResearchModeSensor* m_pAHATSensor = nullptr;
+	IResearchModeSensor* m_pLFSensor = nullptr;
+	IResearchModeSensor* m_pRFSensor = nullptr;
 
 	// camera streamers
 	std::shared_ptr<Streamer> m_pAHATStreamer;
+	std::shared_ptr<Streamer> m_pLFStreamer;
+	std::shared_ptr<Streamer> m_pRFStreamer;
 	
 	// sensor processors
 	std::shared_ptr<ResearchModeFrameProcessor> m_pAHATProcessor;
+	std::shared_ptr<ResearchModeFrameProcessor> m_pLFProcessor;
+	std::shared_ptr<ResearchModeFrameProcessor> m_pRFProcessor;
 }

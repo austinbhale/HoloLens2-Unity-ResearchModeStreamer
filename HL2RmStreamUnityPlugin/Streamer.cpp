@@ -78,7 +78,7 @@ void Streamer::OnConnectionReceived(
 
 void Streamer::Send(
     IResearchModeSensorFrame* frame,
-    ResearchModeSensorType pSensorType)
+    IResearchModeSensor* pSensor)
 {
 #if DBG_ENABLE_INFO_LOGGING
     OutputDebugStringW(L"Streamer::Send: Received frame for sending!\n");
@@ -99,6 +99,8 @@ void Streamer::Send(
         return;
     }
 
+    ResearchModeSensorType pSensorType = pSensor->GetSensorType();
+
     // grab the frame info
     ResearchModeSensorTimestamp rmTimestamp;
     winrt::check_hresult(frame->GetTimeStamp(&rmTimestamp));
@@ -116,53 +118,190 @@ void Streamer::Send(
     const float4x4 rig2worldTransform = make_float4x4_from_quaternion(location.Orientation()) * make_float4x4_translation(location.Position());
     auto absoluteTimestamp = m_converter.RelativeTicksToAbsoluteTicks(HundredsOfNanoseconds((long long)prevTimestamp)).count();
 
-    // grab the frame data
     ResearchModeSensorResolution resolution;
-    IResearchModeSensorDepthFrame* pDepthFrame = nullptr;
     size_t outBufferCount;
-    const UINT16* pDepth = nullptr;
-
-    // invalidation value for AHAT 
-    USHORT maxValue = 4090;
-
     frame->GetResolution(&resolution);
-    HRESULT hr = frame->QueryInterface(IID_PPV_ARGS(&pDepthFrame));
 
-    if (!pDepthFrame)
-    {
-#if DBG_ENABLE_VERBOSE_LOGGING
-        OutputDebugStringW(L"Streamer::SendFrame: Failed to grab depth frame.\n");
-#endif
-        return;
-    }
     int imageWidth = resolution.Width;
     int imageHeight = resolution.Height;
     int pixelStride = resolution.BytesPerPixel;
 
     int rowStride = imageWidth * pixelStride;
+    
+    // grab the frame data
+    std::vector<BYTE> sensorByteData;
+    
+    if (pSensorType == DEPTH_AHAT)
+    {        
+        IResearchModeSensorDepthFrame* pDepthFrame = nullptr;
+        
+        const UINT16* pDepth = nullptr;
 
-    hr = pDepthFrame->GetBuffer(&pDepth, &outBufferCount);
-    std::vector<BYTE> depthByteData;
-    depthByteData.reserve(outBufferCount * sizeof(UINT16));
+        // invalidation value for AHAT 
+        USHORT maxValue = 4090;
 
-    //std::vector<uint16_t> depthBufferAsVector;
-    // validate depth & append to vector
-    for (size_t i = 0; i < outBufferCount; ++i)
-    {
-        // use a different invalidation condition for Long Throw and AHAT 
-        const bool invalid = (pDepth[i] >= maxValue);
-        UINT16 d;
-        if (invalid)
+        HRESULT hr = frame->QueryInterface(IID_PPV_ARGS(&pDepthFrame));
+
+        if (!pDepthFrame)
         {
-            d = 0;
+#if DBG_ENABLE_VERBOSE_LOGGING
+            OutputDebugStringW(L"Streamer::SendFrame: Failed to grab depth frame.\n");
+#endif
+            return;
         }
-        else
+
+        hr = pDepthFrame->GetBuffer(&pDepth, &outBufferCount);
+        sensorByteData.reserve(outBufferCount * sizeof(UINT16));
+
+        // validate depth & append to vector
+        for (size_t i = 0; i < outBufferCount; ++i)
         {
-            d = pDepth[i];
+            // use a different invalidation condition for Long Throw and AHAT 
+            const bool invalid = (pDepth[i] >= maxValue);
+            UINT16 d;
+            if (invalid)
+            {
+                d = 0;
+            }
+            else
+            {
+                d = pDepth[i];
+            }
+            sensorByteData.push_back((BYTE)(d >> 8));
+            sensorByteData.push_back((BYTE)d);
         }
-        depthByteData.push_back((BYTE)(d >> 8));
-        depthByteData.push_back((BYTE)d);
+
+        if (pDepthFrame)
+        {
+            pDepthFrame->Release();
+        }
     }
+
+    if (pSensorType == LEFT_FRONT)
+    {
+        IResearchModeSensorVLCFrame* pLFFrame = nullptr;
+        HRESULT hr = frame->QueryInterface(IID_PPV_ARGS(&pLFFrame));
+
+        if (!pLFFrame)
+        {
+#if DBG_ENABLE_VERBOSE_LOGGING
+            OutputDebugStringW(L"Streamer::SendFrame: Failed to grab front left frame.\n");
+#endif
+            return;
+        }
+
+        size_t outBufferCount = 0;
+        const BYTE* pLFImage = nullptr;
+
+        hr = pLFFrame->GetBuffer(&pLFImage, &outBufferCount);
+        sensorByteData.reserve(outBufferCount * sizeof(UINT8));
+
+        // validate depth & append to vector
+        for (size_t i = 0; i < outBufferCount; ++i)
+        {
+            BYTE d = pLFImage[i];
+            sensorByteData.push_back(d);
+        }
+
+        // release space
+        if (pLFFrame)
+        {
+            pLFFrame->Release();
+        }
+    }    
+    
+    if (pSensorType == RIGHT_FRONT)
+    {
+        IResearchModeSensorVLCFrame* pRFFrame = nullptr;
+        HRESULT hr = frame->QueryInterface(IID_PPV_ARGS(&pRFFrame));
+
+        if (!pRFFrame)
+        {
+#if DBG_ENABLE_VERBOSE_LOGGING
+            OutputDebugStringW(L"Streamer::SendFrame: Failed to grab front left frame.\n");
+#endif
+            return;
+        }
+
+        size_t outBufferCount = 0;
+        const BYTE* pRFImage = nullptr;
+
+        hr = pRFFrame->GetBuffer(&pRFImage, &outBufferCount);
+        sensorByteData.reserve(outBufferCount * sizeof(UINT8));
+
+        // validate depth & append to vector
+        for (size_t i = 0; i < outBufferCount; ++i)
+        {
+            BYTE d = pRFImage[i];
+            sensorByteData.push_back(d);
+        }
+
+        // release space
+        if (pRFFrame)
+        {
+            pRFFrame->Release();
+        }
+    }
+
+    // Get camera sensor object
+    IResearchModeCameraSensor* pCameraSensor = nullptr;
+    HRESULT hr = pSensor->QueryInterface(IID_PPV_ARGS(&pCameraSensor));
+    winrt::check_hresult(hr);
+
+    if (!pCameraSensor)
+    {
+#if DBG_ENABLE_VERBOSE_LOGGING
+        OutputDebugStringW(L"Streamer::SendFrame: Failed to grab sensor for extrinsics.\n");
+#endif
+        return;
+    }
+
+    // Get extrinsics (rotation and translation) with respect to the rigNode
+    DirectX::XMFLOAT4X4 cameraViewMatrix;
+    pCameraSensor->GetCameraExtrinsicsMatrix(&cameraViewMatrix);
+
+    const float4x4 sensorExtrinsics(
+        cameraViewMatrix.m[0][0], cameraViewMatrix.m[1][0], cameraViewMatrix.m[2][0], cameraViewMatrix.m[3][0],
+        cameraViewMatrix.m[0][1], cameraViewMatrix.m[1][1], cameraViewMatrix.m[2][1], cameraViewMatrix.m[3][1],
+        cameraViewMatrix.m[0][2], cameraViewMatrix.m[1][2], cameraViewMatrix.m[2][2], cameraViewMatrix.m[3][2],
+        cameraViewMatrix.m[0][3], cameraViewMatrix.m[1][3], cameraViewMatrix.m[2][3], cameraViewMatrix.m[3][3]);
+
+    float uv[2];
+    float xy[2];
+    std::vector<float> lutTable(size_t(imageWidth * imageHeight) * 3);
+    auto pLutTable = lutTable.data();
+
+    for (size_t y = 0; y < resolution.Height; y++)
+    {
+        uv[1] = (y + 0.5f);
+        for (size_t x = 0; x < resolution.Width; x++)
+        {
+            uv[0] = (x + 0.5f);
+            hr = pCameraSensor->MapImagePointToCameraUnitPlane(uv, xy);
+            if (FAILED(hr))
+            {
+                *pLutTable++ = xy[0];
+                *pLutTable++ = xy[1];
+                *pLutTable++ = 0.f;
+                continue;
+            }
+            float z = 1.0f;
+            const float norm = sqrtf(xy[0] * xy[0] + xy[1] * xy[1] + z * z);
+            const float invNorm = 1.0f / norm;
+            xy[0] *= invNorm;
+            xy[1] *= invNorm;
+            z *= invNorm;
+
+            // Dump LUT row
+            *pLutTable++ = xy[0];
+            *pLutTable++ = xy[1];
+            *pLutTable++ = z;
+        }
+    }
+    pCameraSensor->Release();
+
+    const unsigned char* lutToBytes = reinterpret_cast<const unsigned char*> (lutTable.data());
+    std::vector<unsigned char> lutTableByteData(lutToBytes, lutToBytes + sizeof(float) * lutTable.size());
 
     if (m_writeInProgress)
     {
@@ -185,7 +324,11 @@ void Streamer::Send(
 
         WriteMatrix4x4(rig2worldTransform);
 
-        m_writer.WriteBytes(depthByteData);
+        WriteMatrix4x4(sensorExtrinsics);
+
+        m_writer.WriteBytes(lutTableByteData);
+
+        m_writer.WriteBytes(sensorByteData);
 
 #if DBG_ENABLE_VERBOSE_LOGGING
         OutputDebugStringW(L"Streamer::SendFrame: Trying to store writer...\n");
@@ -211,11 +354,6 @@ void Streamer::Send(
     }
 
     m_writeInProgress = false;
-
-    if (pDepthFrame)
-    {
-        pDepthFrame->Release();
-    }
 
 #if DBG_ENABLE_VERBOSE_LOGGING
     OutputDebugStringW(L"Streamer::SendFrame: Frame sent!\n");

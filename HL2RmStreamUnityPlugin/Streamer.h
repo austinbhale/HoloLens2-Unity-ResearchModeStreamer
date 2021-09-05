@@ -9,7 +9,7 @@ public:
 
 	void Send(
 		IResearchModeSensorFrame* frame,
-		ResearchModeSensorType pSensorType);
+		IResearchModeSensor* pSensor);
 
 	void StreamingToggle();
 

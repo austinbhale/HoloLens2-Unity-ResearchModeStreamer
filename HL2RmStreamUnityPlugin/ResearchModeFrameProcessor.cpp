@@ -166,7 +166,7 @@ void ResearchModeFrameProcessor::FrameProcesingThread(
             {
                 pProcessor->m_pFrameSink->Send(
                     pProcessor->m_pSensorFrame,
-                    pProcessor->m_pRMSensor->GetSensorType());
+                    pProcessor->m_pRMSensor);
             }
         }
     }

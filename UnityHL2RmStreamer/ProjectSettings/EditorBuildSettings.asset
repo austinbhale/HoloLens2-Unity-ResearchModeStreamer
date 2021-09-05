@@ -8,4 +8,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/StreamingScene.unity
     guid: d7f66e59cdc093e47b293263110a6b67
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: a2baedaa0b24d6d4a95b9cf24ee5f9f1,
+      type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 33e46f52b8a569c408a3aba550b35079,
+      type: 2}

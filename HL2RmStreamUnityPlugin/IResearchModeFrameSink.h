@@ -6,5 +6,5 @@ public:
 	virtual ~IResearchModeFrameSink() {};
 	virtual void Send(
 		IResearchModeSensorFrame* pSensorFrame,
-		ResearchModeSensorType pSensorType) = 0;
+		IResearchModeSensor* pSensor) = 0;
 }; 
