@@ -157,6 +157,7 @@ void ResearchModeFrameProcessor::FrameProcesingThread(
 #if DBG_ENABLE_INFO_LOGGING
     OutputDebugString(L"ResearchModeFrameProcessor::CameraStreamThread: Starting processing thread.\n");
 #endif
+    bool b_sentExtrinsics = false;
     while (!pProcessor->m_fExit && pProcessor->m_pFrameSink)
     {
         std::lock_guard<std::mutex> reader_guard(pProcessor->m_sensorFrameMutex);
@@ -164,9 +165,18 @@ void ResearchModeFrameProcessor::FrameProcesingThread(
         {
             if (pProcessor->IsValidTimestamp(pProcessor->m_pSensorFrame))
             {
-                pProcessor->m_pFrameSink->Send(
-                    pProcessor->m_pSensorFrame,
-                    pProcessor->m_pRMSensor);
+                if (b_sentExtrinsics)
+                {
+                    pProcessor->m_pFrameSink->Send(
+                        pProcessor->m_pSensorFrame,
+                        pProcessor->m_pRMSensor->GetSensorType());
+                }
+                else
+                {
+                    b_sentExtrinsics = pProcessor->m_pFrameSink->SendExtrinsics(
+                        pProcessor->m_pSensorFrame,
+                        pProcessor->m_pRMSensor);
+                }
             }
         }
     }

@@ -7,9 +7,13 @@ public:
 		const GUID& guid,
 		const winrt::Windows::Perception::Spatial::SpatialCoordinateSystem& coordSystem);
 
-	void Send(
+	bool SendExtrinsics(
 		IResearchModeSensorFrame* frame,
 		IResearchModeSensor* pSensor);
+
+	void Send(
+		IResearchModeSensorFrame* frame,
+		ResearchModeSensorType pSensorType);
 
 	void StreamingToggle();
 

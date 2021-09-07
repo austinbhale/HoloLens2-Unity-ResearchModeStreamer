@@ -4,7 +4,10 @@ class IResearchModeFrameSink
 {
 public:
 	virtual ~IResearchModeFrameSink() {};
+	virtual bool SendExtrinsics(
+		IResearchModeSensorFrame* pSensorFrame,
+		IResearchModeSensor* pSensor) = 0;	
 	virtual void Send(
 		IResearchModeSensorFrame* pSensorFrame,
-		IResearchModeSensor* pSensor) = 0;
+		ResearchModeSensorType pSensorType) = 0;
 }; 
