@@ -14,11 +14,11 @@ np.warnings.filterwarnings('ignore')
 # Definitions
 # Protocol Header Format
 # see https://docs.python.org/2/library/struct.html#format-characters
-VIDEO_STREAM_HEADER_FORMAT = "@qIIII18f"
+VIDEO_STREAM_HEADER_FORMAT = "@qIIII20f"
 
 VIDEO_FRAME_STREAM_HEADER = namedtuple(
     'SensorFrameStreamHeader',
-    'Timestamp ImageWidth ImageHeight PixelStride RowStride fx fy '
+    'Timestamp ImageWidth ImageHeight PixelStride RowStride fx fy ox oy '
     'PVtoWorldtransformM11 PVtoWorldtransformM12 PVtoWorldtransformM13 PVtoWorldtransformM14 '
     'PVtoWorldtransformM21 PVtoWorldtransformM22 PVtoWorldtransformM23 PVtoWorldtransformM24 '
     'PVtoWorldtransformM31 PVtoWorldtransformM32 PVtoWorldtransformM33 PVtoWorldtransformM34 '
@@ -28,10 +28,10 @@ VIDEO_FRAME_STREAM_HEADER = namedtuple(
 RM_EXTRINSICS_HEADER_FORMAT = "@16f"
 RM_EXTRINSICS_HEADER = namedtuple(
     'SensorFrameExtrinsicsHeader',
-    'sensorExtrinsicsM11 sensorExtrinsicsM12 sensorExtrinsicsM13 sensorExtrinsicsM14 '
-    'sensorExtrinsicsM21 sensorExtrinsicsM22 sensorExtrinsicsM23 sensorExtrinsicsM24 '
-    'sensorExtrinsicsM31 sensorExtrinsicsM32 sensorExtrinsicsM33 sensorExtrinsicsM34 '
-    'sensorExtrinsicsM41 sensorExtrinsicsM42 sensorExtrinsicsM43 sensorExtrinsicsM44 '
+    'rig2camTransformM11 rig2camTransformM12 rig2camTransformM13 rig2camTransformM14 '
+    'rig2camTransformM21 rig2camTransformM22 rig2camTransformM23 rig2camTransformM24 '
+    'rig2camTransformM31 rig2camTransformM32 rig2camTransformM33 rig2camTransformM34 '
+    'rig2camTransformM41 rig2camTransformM42 rig2camTransformM43 rig2camTransformM44 '
 )
 
 RM_STREAM_HEADER_FORMAT = "@qIIII16f"
@@ -206,21 +206,21 @@ class SpatialCamsReceiverThread(FrameReceiverThread):
 
 if __name__ == '__main__':
     video_receiver = VideoReceiverThread(HOST)
-    # video_receiver.start_socket()
+    video_receiver.start_socket()
 
     ahat_extr_receiver = AhatReceiverThread(HOST, AHAT_STREAM_PORT, RM_EXTRINSICS_HEADER_FORMAT, RM_EXTRINSICS_HEADER, True)
-    # ahat_extr_receiver.start_socket()
+    ahat_extr_receiver.start_socket()
 
     lf_extr_receiver = SpatialCamsReceiverThread(HOST, LEFT_FRONT_STREAM_PORT, RM_EXTRINSICS_HEADER_FORMAT, RM_EXTRINSICS_HEADER, True)
-    lf_extr_receiver.start_socket()
+    # lf_extr_receiver.start_socket()
     
     rf_extr_receiver = SpatialCamsReceiverThread(HOST, RIGHT_FRONT_STREAM_PORT, RM_EXTRINSICS_HEADER_FORMAT, RM_EXTRINSICS_HEADER, True)
-    rf_extr_receiver.start_socket()
+    # rf_extr_receiver.start_socket()
 
-    # video_receiver.start_listen()
-    # ahat_extr_receiver.start_listen()
-    lf_extr_receiver.start_listen()
-    rf_extr_receiver.start_listen()
+    video_receiver.start_listen()
+    ahat_extr_receiver.start_listen()
+    # lf_extr_receiver.start_listen()
+    # rf_extr_receiver.start_listen()
 
     ahat_receiver = None
     lf_receiver = None
@@ -228,6 +228,7 @@ if __name__ == '__main__':
 
     start_recording = False
     save_one = 0
+
     while True:
         if np.any(video_receiver.latest_frame):
             cv2.imshow('Photo Video Camera Stream', video_receiver.latest_frame)
@@ -235,16 +236,66 @@ if __name__ == '__main__':
                 break
         
         if ahat_receiver and np.any(ahat_receiver.latest_frame):
-            cv2.imshow('Depth Camera Stream', ahat_receiver.latest_frame)
+            #
+            depth_img = ahat_receiver.latest_frame
+            depth_hdr = ahat_receiver.latest_header
+
+            pv_img = video_receiver.latest_frame
+            pv_hdr = video_receiver.latest_header
+
+            cv2.imshow('Depth Camera Stream', depth_img)
 
             # Get xyz points in camera space
-            points = get_points_in_cam_space(ahat_receiver.latest_frame, ahat_receiver.lut)
+            points = get_points_in_cam_space(depth_img, ahat_receiver.lut)
             
-            output_path = "C:/Users/halea/Documents/test" + str(save_one) + ".ply"
+            pv2world_transform = np.array([
+                pv_hdr.PVtoWorldtransformM11, pv_hdr.PVtoWorldtransformM12, pv_hdr.PVtoWorldtransformM13, pv_hdr.PVtoWorldtransformM14,
+                pv_hdr.PVtoWorldtransformM21, pv_hdr.PVtoWorldtransformM22, pv_hdr.PVtoWorldtransformM23, pv_hdr.PVtoWorldtransformM24,
+                pv_hdr.PVtoWorldtransformM31, pv_hdr.PVtoWorldtransformM32, pv_hdr.PVtoWorldtransformM33, pv_hdr.PVtoWorldtransformM34,
+                pv_hdr.PVtoWorldtransformM41, pv_hdr.PVtoWorldtransformM42, pv_hdr.PVtoWorldtransformM43, pv_hdr.PVtoWorldtransformM44]).reshape(4, 4)
+
+            depth_hdr = ahat_receiver.latest_header
+            rig2world_transform = np.array([
+                depth_hdr.rig2worldTransformM11, depth_hdr.rig2worldTransformM12, depth_hdr.rig2worldTransformM13, depth_hdr.rig2worldTransformM14,
+                depth_hdr.rig2worldTransformM21, depth_hdr.rig2worldTransformM22, depth_hdr.rig2worldTransformM23, depth_hdr.rig2worldTransformM24,
+                depth_hdr.rig2worldTransformM31, depth_hdr.rig2worldTransformM32, depth_hdr.rig2worldTransformM33, depth_hdr.rig2worldTransformM34,
+                depth_hdr.rig2worldTransformM41, depth_hdr.rig2worldTransformM42, depth_hdr.rig2worldTransformM43, depth_hdr.rig2worldTransformM44]).reshape(4, 4)
+
+            xyz, cam2world_transform = cam2world(points, rig2cam_transform, rig2world_transform)
+
+            focal_length = [pv_hdr.fx, pv_hdr.fy]
+            principal_point = [pv_hdr.ox, pv_hdr.oy]
+
+            # Project from depth to pv going via world space
+            rgb, depth = project_on_pv(
+                xyz, pv_img, pv2world_transform, 
+                focal_length, principal_point)
+            
+            # Project depth on virtual pinhole camera and save corresponding
+            # rgb image inside <workspace>/pinhole_projection folder
+            # Create virtual pinhole camera
+            scale = 1
+            width = 320 * scale
+            height = 288 * scale
+            proj_focal_length = 200 * scale
+            intrinsic_matrix = np.array([[proj_focal_length, 0, width / 2.],
+                                            [0, proj_focal_length, height / 2.],
+                                            [0, 0, 1.]])
+            rgb_proj, depth = project_on_depth(
+                points, rgb, intrinsic_matrix, width, height)
+
+            cv2.imshow('test rgb', (rgb_proj).astype(np.uint8))
+            depth = (depth * DEPTH_SCALING_FACTOR).astype(np.uint16)
+            cv2.imshow('test depth', (depth).astype(np.uint16))
+
+            # Save colored point clouds as ply files
+            output_path = "C:/Users/halea/Documents/hl2-rm/frame" + str(save_one) + ".ply"
             save_one += 1
-            
-            # save_ply(output_path, points, rgb=None)
-            
+            save_ply(output_path, points, rgb, pv2world_transform)
+
+            cv2.imwrite(output_path + "rgb.png", rgb_proj)
+            cv2.imwrite(output_path + "depth.png", (depth).astype(np.uint16))
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         elif ahat_extr_receiver and np.any(ahat_extr_receiver.lut):
@@ -253,6 +304,14 @@ if __name__ == '__main__':
             
             ahat_receiver.extrinsics_header = ahat_extr_receiver.extrinsics_header
             ahat_receiver.lut = ahat_extr_receiver.lut
+
+            depth_hdr = ahat_receiver.extrinsics_header
+            rig2cam_transform = np.array([
+                depth_hdr.rig2camTransformM11, depth_hdr.rig2camTransformM12, depth_hdr.rig2camTransformM13, depth_hdr.rig2camTransformM14,
+                depth_hdr.rig2camTransformM21, depth_hdr.rig2camTransformM22, depth_hdr.rig2camTransformM23, depth_hdr.rig2camTransformM24,
+                depth_hdr.rig2camTransformM31, depth_hdr.rig2camTransformM32, depth_hdr.rig2camTransformM33, depth_hdr.rig2camTransformM34,
+                depth_hdr.rig2camTransformM41, depth_hdr.rig2camTransformM42, depth_hdr.rig2camTransformM43, depth_hdr.rig2camTransformM44]).reshape(4, 4)
+
             ahat_extr_receiver = None
 
             ahat_receiver.start_socket()

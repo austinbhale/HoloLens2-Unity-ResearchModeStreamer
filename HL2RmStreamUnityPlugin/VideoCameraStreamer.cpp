@@ -256,6 +256,9 @@ void VideoCameraStreamer::SendFrame(
     // grab the frame info
     float fx = pFrame.VideoMediaFrame().CameraIntrinsics().FocalLength().x;
     float fy = pFrame.VideoMediaFrame().CameraIntrinsics().FocalLength().y;
+    
+    float ox = pFrame.VideoMediaFrame().CameraIntrinsics().PrincipalPoint().x;
+    float oy = pFrame.VideoMediaFrame().CameraIntrinsics().PrincipalPoint().y;
 
     winrt::Windows::Foundation::Numerics::float4x4 PVtoWorldtransform;
     auto PVtoWorld =
@@ -344,6 +347,8 @@ void VideoCameraStreamer::SendFrame(
         m_writer.WriteInt32(outRowStride);
         m_writer.WriteSingle(fx);
         m_writer.WriteSingle(fy);
+        m_writer.WriteSingle(ox);
+        m_writer.WriteSingle(oy);
 
         WriteMatrix4x4(PVtoWorldtransform);
 

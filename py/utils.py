@@ -85,3 +85,9 @@ def project_on_depth(points, rgb, intrinsic_matrix, width, height):
     image = image * 255.
 
     return image, depth_image
+
+def cam2world(points, rig2cam, rig2world):
+    homog_points = np.hstack((points, np.ones((points.shape[0], 1))))
+    cam2world_transform = rig2world @ np.linalg.inv(rig2cam)
+    world_points = cam2world_transform @ homog_points.T
+    return world_points.T[:, :3], cam2world_transform
